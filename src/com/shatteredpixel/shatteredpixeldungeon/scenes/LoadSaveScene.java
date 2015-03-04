@@ -103,11 +103,15 @@ public class LoadSaveScene extends PixelScene {
 		int posX2 = w - (int) (BUTTON2_WIDTH + BUTTON_PADDING);
 		int posX = (int) (BUTTON1_WIDTH + (BUTTON_PADDING * 3));
 		
-        String[] classList = { "warrior", "mage", "rogue", "huntress" };
+		// rogue and huntress do not have matching file names so we need to specify each..
+        String[] classList = { "warrior", "mage", "rogue,game,depth", "huntress,ranger,ranger" };
         String[] slotList = { "A", "B", "C", "D", "E", "F", "G", "H" };
 
-		for (String className : classList) {
-			if (Dungeon.hero.heroClass.title() == className) {
+		for (String classInfo : classList) {
+			String className = getClassInfo(classInfo, "className");
+			String test = Dungeon.hero.heroClass.title();
+			if (Dungeon.hero.heroClass.title().equals(className)) {
+				
 				for (String saveSlot : slotList) {
 					// add the row caption..
 					BitmapText buttonCapton1 = PixelScene.createText( TXT_SLOTNAME + " " + saveSlot, 9 );
@@ -119,7 +123,7 @@ public class LoadSaveScene extends PixelScene {
 	
 					// add the save button..
 					if (Dungeon.hero.isAlive()) {
-						GameButton btnSave = new GameButton( this, true, TXT_SAVE, "", className, saveSlot );
+						GameButton btnSave = new GameButton( this, true, TXT_SAVE, "", classInfo, saveSlot );
 						add( btnSave );
 						btnSave.visible = true;
 						btnSave.setRect(posX, posY, BUTTON1_WIDTH, BUTTON_HEIGHT);	
@@ -130,14 +134,15 @@ public class LoadSaveScene extends PixelScene {
 					if (backupFolder.exists()) {
 						FileInputStream input;
 						try {
-							input = new FileInputStream(saveSlotFolder +"/" + className +".dat");
+							String classFile = getClassInfo(classInfo, "classFile");
+							input = new FileInputStream(saveSlotFolder +"/" + classFile +".dat");
 							Bundle bundle = Bundle.read( input );
 							input.close();
 							int savedDepth = bundle.getInt( DEPTH );
 							Bundle savedHero = bundle.getBundle( HERO );
 							int savedLevel = savedHero.getInt( LEVEL );				
 	                        String savedProgress = Utils.format( TXT_DPTH_LVL, savedDepth, savedLevel );
-							GameButton btnLoad1A = new GameButton( this, false, TXT_LOAD , savedProgress, className, saveSlot );
+							GameButton btnLoad1A = new GameButton( this, false, TXT_LOAD , savedProgress, classInfo, saveSlot );
 	
 							add( btnLoad1A );
 							btnLoad1A.visible = true;
@@ -161,19 +166,34 @@ public class LoadSaveScene extends PixelScene {
 	
 	@Override
 	protected void onBackPressed() {
-		Game.switchScene( StartScene.class );
+        InterlevelScene.mode = InterlevelScene.Mode.CONTINUE;
+        Game.switchScene( InterlevelScene.class );		
 	}
-	
-    protected static void exportGames(String playerClass, String saveSlot) {	
+
+	// returns the named element from the string 
+	private static String getClassInfo(String classInfo, String fieldName) {
+		String[] classBits = classInfo.split(",");
+		String returnValue = classBits[0];
+		if ("classFile".equals(fieldName) && classBits.length > 1) {
+			returnValue = classBits[1];
+		}
+		if ("levelFile".equals(fieldName) && classBits.length > 2) {
+			returnValue = classBits[2];
+		}
+		return returnValue;
+	}
+    protected static void exportGames(String classInfo, String saveSlot) {	
 		ArrayList<String> files = new ArrayList<String>();
 		String savePath = SD_ROOT + "/" + GAME_FOLDER + "/" + SAVE_FOLDER;
 		
+		String className = getClassInfo(classInfo, "className");
+				
 		// make a folder like /cdcard/softPixelDungeon/saves/warrior1/
-		String saveSlotFolder = savePath + "/" + playerClass + saveSlot;
+		String saveSlotFolder = savePath + "/" + className + saveSlot;
 		makeFolder(saveSlotFolder);
 		
 		for(String fileName : Game.instance.fileList()){
-			if(isGameLevelFile(playerClass, fileName)){
+			if(isGameLevelFile(classInfo, fileName)){
 				files.add(fileName);
 			}
 		}
@@ -182,7 +202,7 @@ public class LoadSaveScene extends PixelScene {
 		File backupFolder = new File(saveSlotFolder);
 		
 		for(File backupFile : backupFolder.listFiles()){
-			if(isGameLevelFile(playerClass, backupFile.getName())){
+			if(isGameLevelFile(classInfo, backupFile.getName())){
 				backupFile.delete();
 			}
 		}		
@@ -207,13 +227,15 @@ public class LoadSaveScene extends PixelScene {
 				//Log.d("FAILED EXPORT", f);
 			}
 		}
-		InterlevelScene.mode = InterlevelScene.Mode.CONTINUE;
+		InterlevelScene.mode = InterlevelScene.Mode.SAVE;
 		Game.switchScene( InterlevelScene.class );
 		//WndStory.showChapter(playerClass + " " + Integer.toString(saveSlot) + " saved");
 	}
 
-	private static boolean isGameLevelFile(String playerClass, String fileName) {
-		return fileName.endsWith(".dat") && fileName.startsWith(playerClass);
+	private static boolean isGameLevelFile(String classInfo, String fileName) {
+		String classFile = getClassInfo(classInfo, "classFile");
+		String levelFile = getClassInfo(classInfo, "levelFile");
+		return fileName.endsWith(".dat") && (fileName.startsWith(classFile) || fileName.startsWith(levelFile));
 	}
 
 	private static void makeFolder(String saveSlotFolder) {
@@ -223,21 +245,22 @@ public class LoadSaveScene extends PixelScene {
 		}
 	}
 
-    protected static void importGames(String playerClass, String saveSlot) {	
+    protected static void importGames(String classInfo, String saveSlot) {	
 		ArrayList<String> files = new ArrayList<String>();
 		String savePath = SD_ROOT + "/" + GAME_FOLDER + "/" + SAVE_FOLDER;
-		String saveSlotFolder = savePath + "/" + playerClass + saveSlot;
+		String className = getClassInfo(classInfo, "className");
+		String saveSlotFolder = savePath + "/" + className + saveSlot;
 		File backupFolder = new File(saveSlotFolder);
 		
 		for(File backupFile : backupFolder.listFiles()){
-			if(isGameLevelFile(playerClass, backupFile.getName())){
+			if(isGameLevelFile(classInfo, backupFile.getName())){
 				files.add(backupFile.getName());
 			}
 		}
 
 		// remove in progress game files..
 		for(String fileName : Game.instance.fileList()){
-			if(fileName.startsWith("game_") || isGameLevelFile(playerClass, fileName)){
+			if(fileName.startsWith("game_") || isGameLevelFile(classInfo, fileName)){
 				Game.instance.deleteFile(fileName);
 			}
 		}
@@ -273,28 +296,28 @@ public class LoadSaveScene extends PixelScene {
 		
 		private BitmapText secondary;
 		private Boolean isSave = true;
-		private String playerClass = "";
+		private String classInfo = "";
 		private String saveSlot = "";
 		private LoadSaveScene loadSaveScene;
 		
-		public GameButton(LoadSaveScene loadSaveScene, Boolean isSave, String primary, String secondary, String playerClass, String saveSlot ) {
+		public GameButton(LoadSaveScene loadSaveScene, Boolean isSave, String primary, String secondary, String classInfo, String saveSlot ) {
 			super( primary );
 			this.secondary( secondary );
 			this.isSave = isSave;
-			this.playerClass = playerClass;
+			this.classInfo = classInfo;
 			this.saveSlot = saveSlot;
 			this.loadSaveScene = loadSaveScene;
 		}
 		@Override
 		protected void onClick() {
 			if (isSave) {
-				exportGames(playerClass, saveSlot);
+				exportGames(classInfo, saveSlot);
 			} else {
 				loadSaveScene.add( new WndOptions( TXT_REALLY + " " +saveSlot + " " + secondary.text() + "?", TXT_WARNING, TXT_YES + " " + saveSlot, TXT_NO ) {
                     @Override
                     protected void onSelect( int index ) {
                         if (index == 0) {
-            				importGames(playerClass, saveSlot);
+            				importGames(classInfo, saveSlot);
                         }
                     }
                 } );
